@@ -17,6 +17,7 @@ export class InputHandler {
   private canvas: HTMLCanvasElement;
   private commandCallback: (cmd: GameCommand) => void;
   private currentState: number = 0;
+  private blocked: boolean = false;
 
   constructor(canvas: HTMLCanvasElement, callback: (cmd: GameCommand) => void) {
     this.canvas = canvas;
@@ -26,6 +27,10 @@ export class InputHandler {
 
   setCurrentState(state: number): void {
     this.currentState = state;
+  }
+
+  setBlocked(blocked: boolean): void {
+    this.blocked = blocked;
   }
 
   private setupListeners(): void {
@@ -53,6 +58,7 @@ export class InputHandler {
   }
 
   private handleClick(x: number, y: number): void {
+    if (this.blocked) return;
     switch (this.currentState) {
       case 1: // IDLE
         this.handleIdleClick(x, y);

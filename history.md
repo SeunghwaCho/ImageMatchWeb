@@ -51,9 +51,42 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 | 3 | `insertBlock()` 100회 루프 실패 시 경고 없음 | BoardImpl.java:181 | 실패 시 false 반환 확인, 호출부에서 1000회 루프로 재시도 |
 | 4 | `shuffleImageList()` next > blockKind 시 셔플 누락 | BoardImpl.java:70 | 동일 로직 유지 (경미한 이슈) |
 
+---
+
+## 2026-04-10: 이미지 리소스 + 무지개 타이머 + 매칭 애니메이션
+
+### 작업 개요
+실제 Android 이미지 리소스 적용, 무지개색 타이머 바, 매칭 경로 애니메이션 추가
+
+### 수행 작업
+
+#### 1. 실제 이미지 리소스 적용
+- `imagematch/res/drawable/` PNG 파일을 `assets/blocks/`, `assets/buttons/`로 복사
+- **AssetGenerator.ts** 완전 리라이트: 비동기 이미지 로딩 (`loadImages()`)
+- 이미지 로드 실패 시 프로시저럴 그래픽으로 자동 폴백
+- `updateSize()` 시 로드된 원본 이미지에서 리사이즈
+
+#### 2. 무지개색 타이머 바
+- **Renderer.ts** `drawTimerBar()` 수정
+- 단색 → 7색 무지개 그라데이션 (빨-주-노-초-청-남-보)
+- 남은 시간만큼의 너비에 무지개 전체가 표시됨
+
+#### 3. 매칭 애니메이션 (경로 표시 + 블록 사라짐)
+- **Mahjong.ts**: `previewRemovableBlocks()` 메서드 추가 (제거 전 매칭 블록 미리보기)
+- **Renderer.ts**: `drawMatchAnimation()` 메서드 추가 (3단계 애니메이션)
+  - Phase 1 (0~40%): 클릭 위치 펄스 원 + 경로 라인 확장 애니메이션
+  - Phase 2 (40~70%): 매칭 블록 하이라이트 + 플래시 효과
+  - Phase 3 (70~100%): 블록 축소 + 페이드아웃
+- **App.ts**: `startMatchAnimation()` 메서드 추가 (700ms rAF 루프)
+
+#### 4. 애니메이션 중 타이머 정지 + 터치 차단
+- **InputHandler.ts**: `setBlocked()` 메서드 추가, 차단 시 모든 입력 무시
+- **App.ts**: `animating` 플래그로 타이머 틱 스킵
+- 애니메이션 완료 후 자동 차단 해제 및 승리 조건 확인
+
 ### 기술 스택
 - **언어**: TypeScript (strict mode)
-- **렌더링**: HTML5 Canvas (프로시저럴 그래픽)
+- **렌더링**: HTML5 Canvas (Android 원본 PNG 이미지 + 프로시저럴 폴백)
 - **저장소**: IndexedDB
 - **테스트**: Jest + ts-jest
 - **빌드**: TypeScript Compiler + 자체 번들러

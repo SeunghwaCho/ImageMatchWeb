@@ -739,6 +739,10 @@ class Mahjong {
     initGame() {
         this.board.setStage(this.gameInfo.getStage());
     }
+    // Preview which blocks would be removed (for animation), without modifying state
+    previewRemovableBlocks(x, y) {
+        return this.board.getRemovableBlocks(x, y);
+    }
     // Game actions
     removeBlock(x, y) {
         if (this.currentState !== GameStateType.PLAY)
@@ -912,166 +916,54 @@ class AssetGenerator {
     constructor(blockSize) {
         this.blockImages = [];
         this.buttonImages = new Map();
+        // Raw loaded PNG images (originals, not resized)
+        this.rawBlockImages = [];
+        this.rawButtonImages = new Map();
+        this.imagesLoaded = false;
         this.blockSize = blockSize;
         this.generateBlockImages();
         this.generateButtonImages();
+    }
+    /**
+     * Load all PNG images from the assets/ directory.
+     * After loading, call updateSize() to redraw at the correct size.
+     */
+    async loadImages() {
+        const blockPromises = [];
+        // Load block images: block0..block65, hint (66), block99 (67/NANHEE)
+        for (let i = 0; i <= 65; i++) {
+            blockPromises.push(this.loadImage(`assets/blocks/block${i}.png`));
+        }
+        blockPromises.push(this.loadImage('assets/blocks/hint.png')); // index 66
+        blockPromises.push(this.loadImage('assets/blocks/block99.png')); // index 67 (NANHEE)
+        // Load button images
+        const buttonEntries = Object.entries(AssetGenerator.BUTTON_FILE_MAP);
+        const buttonPromises = buttonEntries.map(([, filename]) => this.loadImage(`assets/buttons/${filename}`));
+        const [blockResults, buttonResults] = await Promise.all([
+            Promise.all(blockPromises),
+            Promise.all(buttonPromises),
+        ]);
+        this.rawBlockImages = blockResults;
+        this.rawButtonImages.clear();
+        buttonEntries.forEach(([name], idx) => {
+            const img = buttonResults[idx];
+            if (img) {
+                this.rawButtonImages.set(name, img);
+            }
+        });
+        this.imagesLoaded = true;
+        // Redraw at current block size using loaded images
+        this.rebuildFromLoaded();
     }
     updateSize(blockSize) {
         this.blockSize = blockSize;
-        this.generateBlockImages();
-        this.generateButtonImages();
-    }
-    generateBlockImages() {
-        this.blockImages = [];
-        const bs = this.blockSize;
-        for (let i = 0; i <= 67; i++) {
-            const canvas = document.createElement('canvas');
-            canvas.width = bs;
-            canvas.height = bs;
-            const ctx = canvas.getContext('2d');
-            if (i === 0) {
-                // Empty cell - dark background
-                ctx.fillStyle = '#1a1a2e';
-                ctx.fillRect(0, 0, bs, bs);
-                ctx.strokeStyle = '#16213e';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(0, 0, bs, bs);
-            }
-            else if (i === 66) {
-                // Hint overlay
-                ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
-                ctx.fillRect(0, 0, bs, bs);
-                ctx.strokeStyle = '#FFD700';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(2, 2, bs - 4, bs - 4);
-            }
-            else if (i === 67) {
-                // NANHEE special
-                ctx.fillStyle = '#FF69B4';
-                ctx.fillRect(2, 2, bs - 4, bs - 4);
-                ctx.strokeStyle = '#FF1493';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(2, 2, bs - 4, bs - 4);
-                ctx.fillStyle = '#FFF';
-                ctx.font = `bold ${Math.floor(bs * 0.5)}px sans-serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('\u2661', bs / 2, bs / 2);
-            }
-            else {
-                // Regular block
-                const colorIdx = i < AssetGenerator.COLORS.length ? i : (i % (AssetGenerator.COLORS.length - 1)) + 1;
-                const color = AssetGenerator.COLORS[colorIdx];
-                // Card background with gradient
-                const gradient = ctx.createLinearGradient(0, 0, bs, bs);
-                gradient.addColorStop(0, color);
-                gradient.addColorStop(1, this.darkenColor(color, 30));
-                ctx.fillStyle = gradient;
-                // Rounded rect
-                const r = Math.floor(bs * 0.1);
-                ctx.beginPath();
-                ctx.moveTo(r + 2, 2);
-                ctx.lineTo(bs - r - 2, 2);
-                ctx.quadraticCurveTo(bs - 2, 2, bs - 2, r + 2);
-                ctx.lineTo(bs - 2, bs - r - 2);
-                ctx.quadraticCurveTo(bs - 2, bs - 2, bs - r - 2, bs - 2);
-                ctx.lineTo(r + 2, bs - 2);
-                ctx.quadraticCurveTo(2, bs - 2, 2, bs - r - 2);
-                ctx.lineTo(2, r + 2);
-                ctx.quadraticCurveTo(2, 2, r + 2, 2);
-                ctx.closePath();
-                ctx.fill();
-                // Border
-                ctx.strokeStyle = this.darkenColor(color, 50);
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                // Symbol
-                const symbolIdx = i < AssetGenerator.SYMBOLS.length ? i : (i % (AssetGenerator.SYMBOLS.length - 1)) + 1;
-                const symbol = AssetGenerator.SYMBOLS[symbolIdx];
-                if (symbol) {
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.font = `bold ${Math.floor(bs * 0.45)}px sans-serif`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(symbol, bs / 2, bs / 2);
-                }
-                // Number in corner
-                ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                ctx.font = `${Math.floor(bs * 0.18)}px sans-serif`;
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                ctx.fillText(String(i), 6, 4);
-            }
-            this.blockImages.push(canvas);
+        if (this.imagesLoaded) {
+            this.rebuildFromLoaded();
         }
-    }
-    generateButtonImages() {
-        this.buttonImages.clear();
-        const bs = this.blockSize;
-        const buttons = [
-            ['newgame', 'NEW GAME', '#E74C3C'],
-            ['start', 'START', '#2ECC71'],
-            ['pause', '\u23F8', '#F39C12'],
-            ['resume', 'RESUME', '#3498DB'],
-            ['win', 'YOU WIN! \u25B6', '#FFD700'],
-            ['gameover', 'GAME OVER', '#C0392B'],
-            ['tryagain', 'TRY AGAIN', '#E67E22'],
-            ['hint', 'HINT', '#9B59B6'],
-            ['challenge', 'CHALLENGE', '#8E44AD'],
-            ['highscore', 'HIGH:', '#2C3E50'],
-        ];
-        for (const [name, text, color] of buttons) {
-            const w = name === 'pause' || name === 'hint' ? bs : bs * 4;
-            const h = name === 'pause' || name === 'hint' ? bs : Math.floor(bs * 1.5);
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            // Button background
-            const gradient = ctx.createLinearGradient(0, 0, 0, h);
-            gradient.addColorStop(0, color);
-            gradient.addColorStop(1, this.darkenColor(color, 30));
-            ctx.fillStyle = gradient;
-            const r = Math.min(10, Math.floor(bs * 0.08));
-            ctx.beginPath();
-            ctx.moveTo(r, 0);
-            ctx.lineTo(w - r, 0);
-            ctx.quadraticCurveTo(w, 0, w, r);
-            ctx.lineTo(w, h - r);
-            ctx.quadraticCurveTo(w, h, w - r, h);
-            ctx.lineTo(r, h);
-            ctx.quadraticCurveTo(0, h, 0, h - r);
-            ctx.lineTo(0, r);
-            ctx.quadraticCurveTo(0, 0, r, 0);
-            ctx.closePath();
-            ctx.fill();
-            // Border
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            // Text
-            ctx.fillStyle = '#FFFFFF';
-            const fontSize = name === 'pause' || name === 'hint'
-                ? Math.floor(bs * 0.5)
-                : Math.floor(h * 0.4);
-            ctx.font = `bold ${fontSize}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, w / 2, h / 2);
-            this.buttonImages.set(name, canvas);
+        else {
+            this.generateBlockImages();
+            this.generateButtonImages();
         }
-        // Timer bar
-        const timerCanvas = document.createElement('canvas');
-        timerCanvas.width = bs * 8;
-        timerCanvas.height = bs - 10;
-        const timerCtx = timerCanvas.getContext('2d');
-        const timerGradient = timerCtx.createLinearGradient(0, 0, bs * 8, 0);
-        timerGradient.addColorStop(0, '#2ECC71');
-        timerGradient.addColorStop(0.5, '#F1C40F');
-        timerGradient.addColorStop(1, '#E74C3C');
-        timerCtx.fillStyle = timerGradient;
-        timerCtx.fillRect(0, 0, bs * 8, bs - 10);
-        this.buttonImages.set('timerbar', timerCanvas);
     }
     getBlockImage(index) {
         if (index < 0 || index >= this.blockImages.length)
@@ -1081,6 +973,232 @@ class AssetGenerator {
     getButtonImage(name) {
         return this.buttonImages.get(name);
     }
+    getBlockSize() {
+        return this.blockSize;
+    }
+    // ------- Private helpers -------
+    /**
+     * Rebuild all block and button canvases from loaded raw images.
+     */
+    rebuildFromLoaded() {
+        this.blockImages = [];
+        const bs = this.blockSize;
+        for (let i = 0; i <= 67; i++) {
+            const raw = i < this.rawBlockImages.length ? this.rawBlockImages[i] : null;
+            if (raw) {
+                this.blockImages.push(this.drawImageToCanvas(raw, bs, bs));
+            }
+            else {
+                this.blockImages.push(this.createFallbackBlock(i, bs));
+            }
+        }
+        this.buttonImages.clear();
+        for (const [name] of Object.entries(AssetGenerator.BUTTON_FILE_MAP)) {
+            const raw = this.rawButtonImages.get(name);
+            if (raw) {
+                // Determine target dimensions based on the raw image aspect ratio
+                const aspect = raw.naturalWidth / raw.naturalHeight;
+                let w;
+                let h;
+                if (name === 'timerbar') {
+                    w = bs * 8;
+                    h = bs - 10;
+                }
+                else if (name === 'pause' || name === 'hint') {
+                    w = bs;
+                    h = bs;
+                }
+                else {
+                    // Preserve aspect ratio with height = bs * 1.5
+                    h = Math.floor(bs * 1.5);
+                    w = Math.floor(h * aspect);
+                }
+                this.buttonImages.set(name, this.drawImageToCanvas(raw, w, h));
+            }
+            else {
+                this.buttonImages.set(name, this.createFallbackButton(name, bs));
+            }
+        }
+    }
+    /**
+     * Load a single image, returning null on failure.
+     */
+    loadImage(src) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => {
+                console.warn(`AssetGenerator: failed to load ${src}, will use fallback`);
+                resolve(null);
+            };
+            img.src = src;
+        });
+    }
+    /**
+     * Draw an HTMLImageElement onto an offscreen canvas at the given dimensions.
+     */
+    drawImageToCanvas(img, w, h) {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        return canvas;
+    }
+    /**
+     * Create a colored fallback block canvas (procedural) for missing images.
+     */
+    createFallbackBlock(i, bs) {
+        const canvas = document.createElement('canvas');
+        canvas.width = bs;
+        canvas.height = bs;
+        const ctx = canvas.getContext('2d');
+        if (i === 0) {
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, bs, bs);
+            ctx.strokeStyle = '#16213e';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(0, 0, bs, bs);
+        }
+        else if (i === 66) {
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+            ctx.fillRect(0, 0, bs, bs);
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(2, 2, bs - 4, bs - 4);
+        }
+        else if (i === 67) {
+            ctx.fillStyle = '#FF69B4';
+            ctx.fillRect(2, 2, bs - 4, bs - 4);
+            ctx.strokeStyle = '#FF1493';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(2, 2, bs - 4, bs - 4);
+            ctx.fillStyle = '#FFF';
+            ctx.font = `bold ${Math.floor(bs * 0.5)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('\u2661', bs / 2, bs / 2);
+        }
+        else {
+            const colorIdx = i < AssetGenerator.COLORS.length ? i : (i % (AssetGenerator.COLORS.length - 1)) + 1;
+            const color = AssetGenerator.COLORS[colorIdx];
+            const gradient = ctx.createLinearGradient(0, 0, bs, bs);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(1, this.darkenColor(color, 30));
+            ctx.fillStyle = gradient;
+            const r = Math.floor(bs * 0.1);
+            ctx.beginPath();
+            ctx.moveTo(r + 2, 2);
+            ctx.lineTo(bs - r - 2, 2);
+            ctx.quadraticCurveTo(bs - 2, 2, bs - 2, r + 2);
+            ctx.lineTo(bs - 2, bs - r - 2);
+            ctx.quadraticCurveTo(bs - 2, bs - 2, bs - r - 2, bs - 2);
+            ctx.lineTo(r + 2, bs - 2);
+            ctx.quadraticCurveTo(2, bs - 2, 2, bs - r - 2);
+            ctx.lineTo(2, r + 2);
+            ctx.quadraticCurveTo(2, 2, r + 2, 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = this.darkenColor(color, 50);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            const symbolIdx = i < AssetGenerator.SYMBOLS.length ? i : (i % (AssetGenerator.SYMBOLS.length - 1)) + 1;
+            const symbol = AssetGenerator.SYMBOLS[symbolIdx];
+            if (symbol) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = `bold ${Math.floor(bs * 0.45)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(symbol, bs / 2, bs / 2);
+            }
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.font = `${Math.floor(bs * 0.18)}px sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(String(i), 6, 4);
+        }
+        return canvas;
+    }
+    /**
+     * Create a colored fallback button canvas (procedural) for missing images.
+     */
+    createFallbackButton(name, bs) {
+        const buttonDefs = {
+            'newgame': ['NEW GAME', '#E74C3C'],
+            'start': ['START', '#2ECC71'],
+            'pause': ['\u23F8', '#F39C12'],
+            'resume': ['RESUME', '#3498DB'],
+            'win': ['YOU WIN! \u25B6', '#FFD700'],
+            'gameover': ['GAME OVER', '#C0392B'],
+            'tryagain': ['TRY AGAIN', '#E67E22'],
+            'hint': ['HINT', '#9B59B6'],
+            'challenge': ['CHALLENGE', '#8E44AD'],
+            'highscore': ['HIGH:', '#2C3E50'],
+        };
+        if (name === 'timerbar') {
+            const canvas = document.createElement('canvas');
+            canvas.width = bs * 8;
+            canvas.height = bs - 10;
+            const ctx = canvas.getContext('2d');
+            const g = ctx.createLinearGradient(0, 0, bs * 8, 0);
+            g.addColorStop(0, '#2ECC71');
+            g.addColorStop(0.5, '#F1C40F');
+            g.addColorStop(1, '#E74C3C');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, bs * 8, bs - 10);
+            return canvas;
+        }
+        const [text, color] = buttonDefs[name] ?? [name.toUpperCase(), '#555555'];
+        const isSmall = name === 'pause' || name === 'hint';
+        const w = isSmall ? bs : bs * 4;
+        const h = isSmall ? bs : Math.floor(bs * 1.5);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(1, this.darkenColor(color, 30));
+        ctx.fillStyle = gradient;
+        const r = Math.min(10, Math.floor(bs * 0.08));
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.quadraticCurveTo(w, 0, w, r);
+        ctx.lineTo(w, h - r);
+        ctx.quadraticCurveTo(w, h, w - r, h);
+        ctx.lineTo(r, h);
+        ctx.quadraticCurveTo(0, h, 0, h - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#FFFFFF';
+        const fontSize = isSmall ? Math.floor(bs * 0.5) : Math.floor(h * 0.4);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, w / 2, h / 2);
+        return canvas;
+    }
+    // ---- Initial procedural generation (before images load) ----
+    generateBlockImages() {
+        this.blockImages = [];
+        const bs = this.blockSize;
+        for (let i = 0; i <= 67; i++) {
+            this.blockImages.push(this.createFallbackBlock(i, bs));
+        }
+    }
+    generateButtonImages() {
+        this.buttonImages.clear();
+        const bs = this.blockSize;
+        for (const name of Object.keys(AssetGenerator.BUTTON_FILE_MAP)) {
+            this.buttonImages.set(name, this.createFallbackButton(name, bs));
+        }
+    }
     darkenColor(hex, amount) {
         const num = parseInt(hex.replace('#', ''), 16);
         const r = Math.max(0, (num >> 16) - amount);
@@ -1088,11 +1206,8 @@ class AssetGenerator {
         const b = Math.max(0, (num & 0x0000FF) - amount);
         return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
     }
-    getBlockSize() {
-        return this.blockSize;
-    }
 }
-// Color palette for block types (65 unique colors + special)
+// Color palette for block types (65 unique colors + special) — used as fallback
 AssetGenerator.COLORS = [
     '#333333', // 0: empty/background
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
@@ -1110,7 +1225,7 @@ AssetGenerator.COLORS = [
     '#1B4F72', '#7E5109', '#784212', '#0E6655', '#4A235A',
     '#154360', // 65
 ];
-// Symbols for card types
+// Symbols for card types — used as fallback
 AssetGenerator.SYMBOLS = [
     '', '\u2660', '\u2665', '\u2666', '\u2663', '\u2605', '\u25CF', '\u25B2', '\u25A0', '\u25C6',
     '\u266A', '\u266B', '\u2600', '\u2601', '\u2602', '\u26A1', '\u2764', '\u273F', '\u2618', '\u2726',
@@ -1120,6 +1235,20 @@ AssetGenerator.SYMBOLS = [
     '\u25C8', '\u25C9', '\u25CA', '\u2B23', '\u2B20', '\u2B24', '\u25B6', '\u25C0', '\u25BC', '\u25B2',
     '\u2B25', '\u2B26', '\u2B27', '\u2B28', '\u2B29', '\u2B2A',
 ];
+// Button name -> PNG filename mapping
+AssetGenerator.BUTTON_FILE_MAP = {
+    'newgame': 'newgame.png',
+    'start': 'start.png',
+    'pause': 'pause.png',
+    'resume': 'resume.png',
+    'win': 'win.png',
+    'gameover': 'gameover.png',
+    'tryagain': 'tryagain.png',
+    'hint': 'hint_button.png',
+    'challenge': 'challenge.png',
+    'highscore': 'highscore.png',
+    'timerbar': 'time.png',
+};
 //# sourceMappingURL=AssetGenerator.js.map
   try { exports.AssetGenerator = AssetGenerator; } catch(e) {}
 };
@@ -1129,13 +1258,17 @@ __modules['ui/Renderer'] = function(exports) {
 var AssetGenerator = __require('ui/AssetGenerator').AssetGenerator;
 var BoardProfile = __require('game/BoardProfile').BoardProfile;
 class Renderer {
-    constructor(canvas) {
+    constructor(canvas, assets) {
         this.width = 0;
         this.height = 0;
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.assets = new AssetGenerator(50);
+        this.assets = assets ?? new AssetGenerator(50);
         this.resize();
+    }
+    setAssets(assets) {
+        this.assets = assets;
+        this.assets.updateSize(BoardProfile.blockSize);
     }
     resize() {
         const dpr = window.devicePixelRatio || 1;
@@ -1222,19 +1355,20 @@ class Renderer {
         // Timer fill
         const ratio = Math.max(0, renderState.time / renderState.maxTime);
         const fillW = barW * ratio;
-        // Color based on time remaining
-        let color;
-        if (ratio > 0.5)
-            color = '#2ECC71';
-        else if (ratio > 0.25)
-            color = '#F1C40F';
-        else
-            color = '#E74C3C';
-        const gradient = ctx.createLinearGradient(startX, barY, startX + fillW, barY);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(1, this.adjustBrightness(color, -20));
-        ctx.fillStyle = gradient;
-        ctx.fillRect(startX, barY, fillW, barH);
+        // Rainbow gradient across the filled portion
+        if (fillW > 0) {
+            const gradient = ctx.createLinearGradient(startX, barY, startX + fillW, barY);
+            gradient.addColorStop(0.0, '#FF0000'); // red
+            gradient.addColorStop(0.14, '#FF8C00'); // orange
+            gradient.addColorStop(0.28, '#FFD700'); // yellow
+            gradient.addColorStop(0.42, '#2ECC71'); // green
+            gradient.addColorStop(0.57, '#00CED1'); // cyan
+            gradient.addColorStop(0.71, '#1E90FF'); // blue
+            gradient.addColorStop(0.85, '#9B59B6'); // violet
+            gradient.addColorStop(1.0, '#FF0000'); // red
+            ctx.fillStyle = gradient;
+            ctx.fillRect(startX, barY, fillW, barH);
+        }
         // Border
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 2;
@@ -1303,11 +1437,150 @@ class Renderer {
         ctx.textBaseline = 'top';
         ctx.fillText(`HIGH: ${String(renderState.highScore).padStart(8, '0')}`, startX, infoY + bs + 5);
     }
+    drawMatchAnimation(rs) {
+        const anim = rs.matchAnimation;
+        if (!anim)
+            return;
+        const ctx = this.ctx;
+        const bs = BoardProfile.blockSize;
+        const { startX, startY } = BoardProfile;
+        const { clickX, clickY, matchedBlocks, progress } = anim;
+        const cx = startX + clickX * bs + bs / 2;
+        const cy = startY + clickY * bs + bs / 2;
+        // Phase 1 (0.0 - 0.4): Path appears
+        if (progress <= 0.4) {
+            const phase1 = progress / 0.4; // 0 to 1
+            // Pulsing circle at click position
+            ctx.save();
+            const pulseRadius = bs * 0.3 + Math.sin(phase1 * Math.PI * 4) * bs * 0.1;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00FFFF';
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, pulseRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
+            ctx.restore();
+            // Animated lines from click to each matched block
+            for (const block of matchedBlocks) {
+                const bx = startX + block.x * bs + bs / 2;
+                const by = startY + block.y * bs + bs / 2;
+                const dx = bx - cx;
+                const dy = by - cy;
+                const endLineX = cx + dx * phase1;
+                const endLineY = cy + dy * phase1;
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00FFFF';
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(endLineX, endLineY);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                ctx.restore();
+            }
+        }
+        // Phase 2 (0.4 - 0.7): Blocks highlight
+        if (progress > 0.4 && progress <= 0.7) {
+            const phase2 = (progress - 0.4) / 0.3; // 0 to 1
+            // Fully drawn lines
+            for (const block of matchedBlocks) {
+                const bx = startX + block.x * bs + bs / 2;
+                const by = startY + block.y * bs + bs / 2;
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00FFFF';
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                ctx.restore();
+            }
+            // Pulsing highlight on matched blocks
+            const pulseAlpha = 0.4 + Math.sin(phase2 * Math.PI * 3) * 0.3;
+            for (const block of matchedBlocks) {
+                const bx = startX + block.x * bs;
+                const by = startY + block.y * bs;
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(bx + 2, by + 2, bs - 4, bs - 4);
+                // Flash effect
+                ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.3})`;
+                ctx.fillRect(bx, by, bs, bs);
+                ctx.restore();
+            }
+            // Click circle still visible
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00FFFF';
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, bs * 0.3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
+            ctx.restore();
+        }
+        // Phase 3 (0.7 - 1.0): Blocks fade and shrink
+        if (progress > 0.7) {
+            const phase3 = (progress - 0.7) / 0.3; // 0 to 1
+            // Fading lines
+            const lineAlpha = 1.0 - phase3;
+            for (const block of matchedBlocks) {
+                const bx = startX + block.x * bs + bs / 2;
+                const by = startY + block.y * bs + bs / 2;
+                ctx.save();
+                ctx.globalAlpha = lineAlpha;
+                ctx.shadowBlur = 10 * lineAlpha;
+                ctx.shadowColor = '#00FFFF';
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                ctx.restore();
+            }
+            // Shrinking and fading blocks
+            const scale = 1.0 - phase3;
+            const alpha = 1.0 - phase3;
+            for (const block of matchedBlocks) {
+                const bx = startX + block.x * bs;
+                const by = startY + block.y * bs;
+                const centerX = bx + bs / 2;
+                const centerY = by + bs / 2;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.translate(centerX, centerY);
+                ctx.scale(scale, scale);
+                ctx.translate(-centerX, -centerY);
+                ctx.drawImage(this.assets.getBlockImage(block.type), bx, by, bs, bs);
+                ctx.restore();
+            }
+        }
+    }
     drawPlayScreen(rs) {
         this.drawBoard(rs);
         this.drawTimerBar(rs);
         this.drawScore(rs);
         this.drawStageAndButtons(rs);
+        // Match animation overlay
+        if (rs.matchAnimation) {
+            this.drawMatchAnimation(rs);
+        }
     }
     drawIdleScreen(rs) {
         this.drawBoard(rs);
@@ -1454,12 +1727,16 @@ var BoardProfile = __require('game/BoardProfile').BoardProfile;
 class InputHandler {
     constructor(canvas, callback) {
         this.currentState = 0;
+        this.blocked = false;
         this.canvas = canvas;
         this.commandCallback = callback;
         this.setupListeners();
     }
     setCurrentState(state) {
         this.currentState = state;
+    }
+    setBlocked(blocked) {
+        this.blocked = blocked;
     }
     setupListeners() {
         // Prevent double-tap zoom and scrolling
@@ -1483,6 +1760,8 @@ class InputHandler {
         });
     }
     handleClick(x, y) {
+        if (this.blocked)
+            return;
         switch (this.currentState) {
             case 1: // IDLE
                 this.handleIdleClick(x, y);
@@ -1613,6 +1892,7 @@ __modules['App'] = function(exports) {
 var Mahjong = __require('game/Mahjong').Mahjong;
 var BoardProfile = __require('game/BoardProfile').BoardProfile;
 var Renderer = __require('ui/Renderer').Renderer;
+var AssetGenerator = __require('ui/AssetGenerator').AssetGenerator;
 var InputHandler = __require('ui/InputHandler').InputHandler;
 var GameStorage = __require('storage/GameStorage').GameStorage;
 class App {
@@ -1620,6 +1900,10 @@ class App {
         this.timerInterval = null;
         this.animationFrameId = null;
         this.hasSaved = false;
+        this.animating = false;
+        this.matchAnimation = null;
+        this.matchAnimRafId = null;
+        this.canvas = canvas;
         this.game = new Mahjong();
         this.renderer = new Renderer(canvas);
         this.storage = new GameStorage();
@@ -1652,6 +1936,15 @@ class App {
         catch {
             this.hasSaved = false;
         }
+        // Load image assets and recreate renderer with them
+        try {
+            const assets = new AssetGenerator(50);
+            await assets.loadImages();
+            this.renderer = new Renderer(this.canvas, assets);
+        }
+        catch {
+            // Keep the default renderer with fallback assets
+        }
         this.render();
     }
     handleCommand(cmd) {
@@ -1671,11 +1964,15 @@ class App {
                 break;
             case 'REMOVE':
                 if (this.game.isPlayState()) {
-                    this.game.removeBlock(cmd.x, cmd.y);
-                    if (this.game.isFinishGame()) {
-                        this.game.winState();
-                        this.stopTimer();
-                        this.clearSave();
+                    const previewBlocks = this.game.previewRemovableBlocks(cmd.x, cmd.y);
+                    if (previewBlocks.length > 0) {
+                        const blocks = previewBlocks.map(b => ({ x: b.x, y: b.y, type: b.type }));
+                        this.game.removeBlock(cmd.x, cmd.y);
+                        this.startMatchAnimation(cmd.x, cmd.y, blocks);
+                        return; // Animation handles render and win check
+                    }
+                    else {
+                        this.game.removeBlock(cmd.x, cmd.y);
                     }
                 }
                 break;
@@ -1710,6 +2007,8 @@ class App {
     startTimer() {
         this.stopTimer();
         this.timerInterval = window.setInterval(() => {
+            if (this.animating)
+                return; // Skip tick during animation
             if (this.game.isPlayState()) {
                 const alive = this.game.tick();
                 if (!alive) {
@@ -1750,10 +2049,46 @@ class App {
                 hintBlocks: hintBlocks.map(b => ({ x: b.x, y: b.y, type: b.type })),
                 lastRemovedBlocks: [],
                 animationProgress: 1,
+                matchAnimation: this.matchAnimation,
             };
             this.renderer.render(renderState);
             this.animationFrameId = null;
         });
+    }
+    startMatchAnimation(clickX, clickY, blocks) {
+        this.animating = true;
+        this.inputHandler.setBlocked(true);
+        this.matchAnimation = {
+            clickX, clickY,
+            matchedBlocks: blocks,
+            progress: 0,
+        };
+        const startTime = performance.now();
+        const duration = 700; // ms
+        const animate = (now) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(1.0, elapsed / duration);
+            this.matchAnimation = { ...this.matchAnimation, progress };
+            this.render();
+            if (progress < 1.0) {
+                this.matchAnimRafId = requestAnimationFrame(animate);
+            }
+            else {
+                this.animating = false;
+                this.inputHandler.setBlocked(false);
+                this.matchAnimation = null;
+                this.matchAnimRafId = null;
+                // Check win condition after animation
+                if (this.game.isFinishGame()) {
+                    this.game.winState();
+                    this.stopTimer();
+                    this.clearSave();
+                    this.inputHandler.setCurrentState(this.game.getState());
+                }
+                this.render();
+            }
+        };
+        this.matchAnimRafId = requestAnimationFrame(animate);
     }
     async saveGame() {
         try {

@@ -1,6 +1,13 @@
 import { AssetGenerator } from './AssetGenerator';
 import { BoardProfile } from '../game/BoardProfile';
 
+export interface MatchAnimationData {
+  clickX: number;
+  clickY: number;
+  matchedBlocks: { x: number; y: number; type: number }[];
+  progress: number;
+}
+
 export interface RenderState {
   board: number[][];
   boardWidth: number;
@@ -16,6 +23,7 @@ export interface RenderState {
   hintBlocks: { x: number; y: number; type: number }[];
   lastRemovedBlocks: { x: number; y: number }[];
   animationProgress: number;
+  matchAnimation: MatchAnimationData | null;
 }
 
 export class Renderer {
@@ -25,11 +33,16 @@ export class Renderer {
   private width: number = 0;
   private height: number = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, assets?: AssetGenerator) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
-    this.assets = new AssetGenerator(50);
+    this.assets = assets ?? new AssetGenerator(50);
     this.resize();
+  }
+
+  setAssets(assets: AssetGenerator): void {
+    this.assets = assets;
+    this.assets.updateSize(BoardProfile.blockSize);
   }
 
   resize(): void {
@@ -131,17 +144,20 @@ export class Renderer {
     const ratio = Math.max(0, renderState.time / renderState.maxTime);
     const fillW = barW * ratio;
 
-    // Color based on time remaining
-    let color: string;
-    if (ratio > 0.5) color = '#2ECC71';
-    else if (ratio > 0.25) color = '#F1C40F';
-    else color = '#E74C3C';
-
-    const gradient = ctx.createLinearGradient(startX, barY, startX + fillW, barY);
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(1, this.adjustBrightness(color, -20));
-    ctx.fillStyle = gradient;
-    ctx.fillRect(startX, barY, fillW, barH);
+    // Rainbow gradient across the filled portion
+    if (fillW > 0) {
+      const gradient = ctx.createLinearGradient(startX, barY, startX + fillW, barY);
+      gradient.addColorStop(0.0, '#FF0000');   // red
+      gradient.addColorStop(0.14, '#FF8C00');  // orange
+      gradient.addColorStop(0.28, '#FFD700');  // yellow
+      gradient.addColorStop(0.42, '#2ECC71');  // green
+      gradient.addColorStop(0.57, '#00CED1');  // cyan
+      gradient.addColorStop(0.71, '#1E90FF');  // blue
+      gradient.addColorStop(0.85, '#9B59B6');  // violet
+      gradient.addColorStop(1.0, '#FF0000');   // red
+      ctx.fillStyle = gradient;
+      ctx.fillRect(startX, barY, fillW, barH);
+    }
 
     // Border
     ctx.strokeStyle = '#333';
@@ -242,11 +258,170 @@ export class Renderer {
     );
   }
 
+  private drawMatchAnimation(rs: RenderState): void {
+    const anim = rs.matchAnimation;
+    if (!anim) return;
+
+    const ctx = this.ctx;
+    const bs = BoardProfile.blockSize;
+    const { startX, startY } = BoardProfile;
+    const { clickX, clickY, matchedBlocks, progress } = anim;
+
+    const cx = startX + clickX * bs + bs / 2;
+    const cy = startY + clickY * bs + bs / 2;
+
+    // Phase 1 (0.0 - 0.4): Path appears
+    if (progress <= 0.4) {
+      const phase1 = progress / 0.4; // 0 to 1
+
+      // Pulsing circle at click position
+      ctx.save();
+      const pulseRadius = bs * 0.3 + Math.sin(phase1 * Math.PI * 4) * bs * 0.1;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#00FFFF';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, pulseRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+      ctx.restore();
+
+      // Animated lines from click to each matched block
+      for (const block of matchedBlocks) {
+        const bx = startX + block.x * bs + bs / 2;
+        const by = startY + block.y * bs + bs / 2;
+
+        const dx = bx - cx;
+        const dy = by - cy;
+        const endLineX = cx + dx * phase1;
+        const endLineY = cy + dy * phase1;
+
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00FFFF';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(endLineX, endLineY);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+        ctx.restore();
+      }
+    }
+
+    // Phase 2 (0.4 - 0.7): Blocks highlight
+    if (progress > 0.4 && progress <= 0.7) {
+      const phase2 = (progress - 0.4) / 0.3; // 0 to 1
+
+      // Fully drawn lines
+      for (const block of matchedBlocks) {
+        const bx = startX + block.x * bs + bs / 2;
+        const by = startY + block.y * bs + bs / 2;
+
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00FFFF';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+        ctx.restore();
+      }
+
+      // Pulsing highlight on matched blocks
+      const pulseAlpha = 0.4 + Math.sin(phase2 * Math.PI * 3) * 0.3;
+      for (const block of matchedBlocks) {
+        const bx = startX + block.x * bs;
+        const by = startY + block.y * bs;
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(bx + 2, by + 2, bs - 4, bs - 4);
+
+        // Flash effect
+        ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.3})`;
+        ctx.fillRect(bx, by, bs, bs);
+        ctx.restore();
+      }
+
+      // Click circle still visible
+      ctx.save();
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#00FFFF';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, bs * 0.3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+      ctx.restore();
+    }
+
+    // Phase 3 (0.7 - 1.0): Blocks fade and shrink
+    if (progress > 0.7) {
+      const phase3 = (progress - 0.7) / 0.3; // 0 to 1
+
+      // Fading lines
+      const lineAlpha = 1.0 - phase3;
+      for (const block of matchedBlocks) {
+        const bx = startX + block.x * bs + bs / 2;
+        const by = startY + block.y * bs + bs / 2;
+
+        ctx.save();
+        ctx.globalAlpha = lineAlpha;
+        ctx.shadowBlur = 10 * lineAlpha;
+        ctx.shadowColor = '#00FFFF';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+        ctx.restore();
+      }
+
+      // Shrinking and fading blocks
+      const scale = 1.0 - phase3;
+      const alpha = 1.0 - phase3;
+      for (const block of matchedBlocks) {
+        const bx = startX + block.x * bs;
+        const by = startY + block.y * bs;
+        const centerX = bx + bs / 2;
+        const centerY = by + bs / 2;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(centerX, centerY);
+        ctx.scale(scale, scale);
+        ctx.translate(-centerX, -centerY);
+        ctx.drawImage(this.assets.getBlockImage(block.type), bx, by, bs, bs);
+        ctx.restore();
+      }
+    }
+  }
+
   private drawPlayScreen(rs: RenderState): void {
     this.drawBoard(rs);
     this.drawTimerBar(rs);
     this.drawScore(rs);
     this.drawStageAndButtons(rs);
+
+    // Match animation overlay
+    if (rs.matchAnimation) {
+      this.drawMatchAnimation(rs);
+    }
   }
 
   private drawIdleScreen(rs: RenderState): void {

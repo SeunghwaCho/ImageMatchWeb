@@ -1,3 +1,4 @@
+import { Block } from './Block';
 import { Board, PlayStateCallback } from './Board';
 import { GameInfo } from './GameInfo';
 import { GameStateType, GameStateValue } from './GameState';
@@ -139,6 +140,11 @@ export class Mahjong implements PlayStateCallback {
 
   private initGame(): void {
     this.board.setStage(this.gameInfo.getStage());
+  }
+
+  // Preview which blocks would be removed (for animation), without modifying state
+  previewRemovableBlocks(x: number, y: number): Block[] {
+    return this.board.getRemovableBlocks(x, y);
   }
 
   // Game actions

@@ -2,7 +2,8 @@ import { Mahjong } from './game/Mahjong';
 import { GameInfo } from './game/GameInfo';
 import { GameStateType } from './game/GameState';
 import { BoardProfile } from './game/BoardProfile';
-import { Renderer, RenderState } from './ui/Renderer';
+import { Renderer, RenderState, MatchAnimationData } from './ui/Renderer';
+import { AssetGenerator } from './ui/AssetGenerator';
 import { InputHandler, GameCommand } from './ui/InputHandler';
 import { GameStorage } from './storage/GameStorage';
 
@@ -14,8 +15,13 @@ export class App {
   private timerInterval: number | null = null;
   private animationFrameId: number | null = null;
   private hasSaved: boolean = false;
+  private animating: boolean = false;
+  private matchAnimation: MatchAnimationData | null = null;
+  private matchAnimRafId: number | null = null;
+  private canvas: HTMLCanvasElement;
 
   constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
     this.game = new Mahjong();
     this.renderer = new Renderer(canvas);
     this.storage = new GameStorage();
@@ -52,6 +58,16 @@ export class App {
     } catch {
       this.hasSaved = false;
     }
+
+    // Load image assets and recreate renderer with them
+    try {
+      const assets = new AssetGenerator(50);
+      await assets.loadImages();
+      this.renderer = new Renderer(this.canvas, assets);
+    } catch {
+      // Keep the default renderer with fallback assets
+    }
+
     this.render();
   }
 
@@ -75,11 +91,14 @@ export class App {
 
       case 'REMOVE':
         if (this.game.isPlayState()) {
-          this.game.removeBlock(cmd.x, cmd.y);
-          if (this.game.isFinishGame()) {
-            this.game.winState();
-            this.stopTimer();
-            this.clearSave();
+          const previewBlocks = this.game.previewRemovableBlocks(cmd.x, cmd.y);
+          if (previewBlocks.length > 0) {
+            const blocks = previewBlocks.map(b => ({ x: b.x, y: b.y, type: b.type }));
+            this.game.removeBlock(cmd.x, cmd.y);
+            this.startMatchAnimation(cmd.x, cmd.y, blocks);
+            return; // Animation handles render and win check
+          } else {
+            this.game.removeBlock(cmd.x, cmd.y);
           }
         }
         break;
@@ -122,6 +141,7 @@ export class App {
   private startTimer(): void {
     this.stopTimer();
     this.timerInterval = window.setInterval(() => {
+      if (this.animating) return;  // Skip tick during animation
       if (this.game.isPlayState()) {
         const alive = this.game.tick();
         if (!alive) {
@@ -165,11 +185,49 @@ export class App {
         hintBlocks: hintBlocks.map(b => ({ x: b.x, y: b.y, type: b.type })),
         lastRemovedBlocks: [],
         animationProgress: 1,
+        matchAnimation: this.matchAnimation,
       };
 
       this.renderer.render(renderState);
       this.animationFrameId = null;
     });
+  }
+
+  private startMatchAnimation(clickX: number, clickY: number, blocks: {x: number; y: number; type: number}[]): void {
+    this.animating = true;
+    this.inputHandler.setBlocked(true);
+    this.matchAnimation = {
+      clickX, clickY,
+      matchedBlocks: blocks,
+      progress: 0,
+    };
+    const startTime = performance.now();
+    const duration = 700; // ms
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1.0, elapsed / duration);
+      this.matchAnimation = { ...this.matchAnimation!, progress };
+      this.render();
+
+      if (progress < 1.0) {
+        this.matchAnimRafId = requestAnimationFrame(animate);
+      } else {
+        this.animating = false;
+        this.inputHandler.setBlocked(false);
+        this.matchAnimation = null;
+        this.matchAnimRafId = null;
+        // Check win condition after animation
+        if (this.game.isFinishGame()) {
+          this.game.winState();
+          this.stopTimer();
+          this.clearSave();
+          this.inputHandler.setCurrentState(this.game.getState());
+        }
+        this.render();
+      }
+    };
+    this.matchAnimRafId = requestAnimationFrame(animate);
   }
 
   private async saveGame(): Promise<void> {
