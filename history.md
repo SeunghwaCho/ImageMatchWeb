@@ -112,6 +112,29 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
   - `index.html` 내 스크립트 경로 자동 수정 (`dist/bundle.js` → `bundle.js`)
 - `.gitignore`에 `release/` 추가
 
+---
+
+## 2026-04-10: 고해상도(HiDPI) 디스플레이 이미지 흐림 수정
+
+### 문제
+웹앱에서 블록/버튼 이미지가 흐릿하게 표시됨. 고해상도(DPR 2x, 3x) 디스플레이에서 특히 심함.
+
+### 원인
+- 메인 캔버스는 `devicePixelRatio` 처리를 하여 고해상도 렌더링
+- 그러나 `AssetGenerator`가 생성하는 오프스크린 캔버스(블록/버튼 이미지)는 1x 해상도로 생성
+- 1x 이미지가 DPR 배율의 메인 캔버스에 확대되면서 흐림 발생
+
+### 수정 사항
+
+#### 1. AssetGenerator.ts - 오프스크린 캔버스 DPR 적용
+- `dpr` 프로퍼티 추가, 생성자 및 `updateSize()`에서 갱신
+- `drawImageToCanvas()`: 캔버스 크기를 `w*dpr × h*dpr`로 생성, 컨텍스트 `scale(dpr, dpr)` 적용
+- `createFallbackBlock()`: 동일한 DPR 스케일링 적용
+- `createFallbackButton()`: 일반 버튼 및 타이머바 모두 DPR 스케일링 적용
+
+#### 2. Renderer.ts - 이미지 보간 품질 향상
+- `resize()`에서 `imageSmoothingEnabled = true`, `imageSmoothingQuality = 'high'` 설정
+
 ### 기술 스택
 - **언어**: TypeScript (strict mode)
 - **렌더링**: HTML5 Canvas (Android 원본 PNG 이미지 + 프로시저럴 폴백)

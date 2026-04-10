@@ -2,6 +2,7 @@ export class AssetGenerator {
   private blockImages: CanvasImageSource[] = [];
   private buttonImages: Map<string, CanvasImageSource> = new Map();
   private blockSize: number;
+  private dpr: number;
 
   // Raw loaded PNG images (originals, not resized)
   private rawBlockImages: (HTMLImageElement | null)[] = [];
@@ -55,6 +56,7 @@ export class AssetGenerator {
 
   constructor(blockSize: number) {
     this.blockSize = blockSize;
+    this.dpr = window.devicePixelRatio || 1;
     this.generateBlockImages();
     this.generateButtonImages();
   }
@@ -102,6 +104,7 @@ export class AssetGenerator {
 
   updateSize(blockSize: number): void {
     this.blockSize = blockSize;
+    this.dpr = window.devicePixelRatio || 1;
     if (this.imagesLoaded) {
       this.rebuildFromLoaded();
     } else {
@@ -186,10 +189,12 @@ export class AssetGenerator {
    * Draw an HTMLImageElement onto an offscreen canvas at the given dimensions.
    */
   private drawImageToCanvas(img: HTMLImageElement, w: number, h: number): HTMLCanvasElement {
+    const dpr = this.dpr;
     const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
     const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
     ctx.drawImage(img, 0, 0, w, h);
     return canvas;
   }
@@ -198,10 +203,12 @@ export class AssetGenerator {
    * Create a colored fallback block canvas (procedural) for missing images.
    */
   private createFallbackBlock(i: number, bs: number): HTMLCanvasElement {
+    const dpr = this.dpr;
     const canvas = document.createElement('canvas');
-    canvas.width = bs;
-    canvas.height = bs;
+    canvas.width = bs * dpr;
+    canvas.height = bs * dpr;
     const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
 
     if (i === 0) {
       ctx.fillStyle = '#1a1a2e';
@@ -291,28 +298,34 @@ export class AssetGenerator {
     };
 
     if (name === 'timerbar') {
+      const dpr = this.dpr;
       const canvas = document.createElement('canvas');
-      canvas.width = bs * 8;
-      canvas.height = bs - 10;
+      const w = bs * 8;
+      const h = bs - 10;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
       const ctx = canvas.getContext('2d')!;
-      const g = ctx.createLinearGradient(0, 0, bs * 8, 0);
+      ctx.scale(dpr, dpr);
+      const g = ctx.createLinearGradient(0, 0, w, 0);
       g.addColorStop(0, '#2ECC71');
       g.addColorStop(0.5, '#F1C40F');
       g.addColorStop(1, '#E74C3C');
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, bs * 8, bs - 10);
+      ctx.fillRect(0, 0, w, h);
       return canvas;
     }
 
+    const dpr = this.dpr;
     const [text, color] = buttonDefs[name] ?? [name.toUpperCase(), '#555555'];
     const isSmall = name === 'pause' || name === 'hint';
     const w = isSmall ? bs : bs * 4;
     const h = isSmall ? bs : Math.floor(bs * 1.5);
 
     const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
     const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
 
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
     gradient.addColorStop(0, color);

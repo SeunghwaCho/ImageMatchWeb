@@ -55,6 +55,8 @@ export class Renderer {
     this.canvas.width = w * dpr;
     this.canvas.height = h * dpr;
     this.ctx.scale(dpr, dpr);
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = 'high';
 
     this.width = w;
     this.height = h;
