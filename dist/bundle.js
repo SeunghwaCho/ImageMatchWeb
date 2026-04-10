@@ -921,6 +921,7 @@ class AssetGenerator {
         this.rawButtonImages = new Map();
         this.imagesLoaded = false;
         this.blockSize = blockSize;
+        this.dpr = window.devicePixelRatio || 1;
         this.generateBlockImages();
         this.generateButtonImages();
     }
@@ -957,6 +958,7 @@ class AssetGenerator {
     }
     updateSize(blockSize) {
         this.blockSize = blockSize;
+        this.dpr = window.devicePixelRatio || 1;
         if (this.imagesLoaded) {
             this.rebuildFromLoaded();
         }
@@ -1038,10 +1040,12 @@ class AssetGenerator {
      * Draw an HTMLImageElement onto an offscreen canvas at the given dimensions.
      */
     drawImageToCanvas(img, w, h) {
+        const dpr = this.dpr;
         const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
         const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
         ctx.drawImage(img, 0, 0, w, h);
         return canvas;
     }
@@ -1049,10 +1053,12 @@ class AssetGenerator {
      * Create a colored fallback block canvas (procedural) for missing images.
      */
     createFallbackBlock(i, bs) {
+        const dpr = this.dpr;
         const canvas = document.createElement('canvas');
-        canvas.width = bs;
-        canvas.height = bs;
+        canvas.width = bs * dpr;
+        canvas.height = bs * dpr;
         const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
         if (i === 0) {
             ctx.fillStyle = '#1a1a2e';
             ctx.fillRect(0, 0, bs, bs);
@@ -1136,26 +1142,32 @@ class AssetGenerator {
             'highscore': ['HIGH:', '#2C3E50'],
         };
         if (name === 'timerbar') {
+            const dpr = this.dpr;
             const canvas = document.createElement('canvas');
-            canvas.width = bs * 8;
-            canvas.height = bs - 10;
+            const w = bs * 8;
+            const h = bs - 10;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
             const ctx = canvas.getContext('2d');
-            const g = ctx.createLinearGradient(0, 0, bs * 8, 0);
+            ctx.scale(dpr, dpr);
+            const g = ctx.createLinearGradient(0, 0, w, 0);
             g.addColorStop(0, '#2ECC71');
             g.addColorStop(0.5, '#F1C40F');
             g.addColorStop(1, '#E74C3C');
             ctx.fillStyle = g;
-            ctx.fillRect(0, 0, bs * 8, bs - 10);
+            ctx.fillRect(0, 0, w, h);
             return canvas;
         }
+        const dpr = this.dpr;
         const [text, color] = buttonDefs[name] ?? [name.toUpperCase(), '#555555'];
         const isSmall = name === 'pause' || name === 'hint';
         const w = isSmall ? bs : bs * 4;
         const h = isSmall ? bs : Math.floor(bs * 1.5);
         const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
         const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
         const gradient = ctx.createLinearGradient(0, 0, 0, h);
         gradient.addColorStop(0, color);
         gradient.addColorStop(1, this.darkenColor(color, 30));
@@ -1279,6 +1291,8 @@ class Renderer {
         this.canvas.width = w * dpr;
         this.canvas.height = h * dpr;
         this.ctx.scale(dpr, dpr);
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
         this.width = w;
         this.height = h;
         BoardProfile.setScreenSize(w, h);
@@ -1472,6 +1486,11 @@ class Renderer {
             ctx.textBaseline = 'middle';
             ctx.fillText(String(renderState.hintCount), hintX + bs + bs * 0.4, infoY + bs / 2);
         }
+        // Mute button (left of hint)
+        const muteX = endX - bs * 5;
+        const muteSize = bs * 0.7;
+        const muteY = infoY + (bs - muteSize) / 2;
+        this.drawMuteIcon(muteX, muteY, muteSize, renderState.muted);
         // High score at bottom
         ctx.fillStyle = '#888';
         ctx.font = `${Math.floor(bs * 0.35)}px monospace`;
@@ -1769,6 +1788,24 @@ class Renderer {
             ctx.drawImage(resumeBtn, buttonX, buttonY + bs * 7, buttonW, buttonH);
         }
     }
+    drawMuteIcon(x, y, size, muted) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.fillStyle = muted ? '#666' : '#AAA';
+        ctx.font = `${Math.floor(size * 0.85)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(muted ? '\uD83D\uDD07' : '\uD83D\uDD0A', x + size / 2, y + size / 2);
+        if (muted) {
+            ctx.strokeStyle = '#E74C3C';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + size * 0.15, y + size * 0.15);
+            ctx.lineTo(x + size * 0.85, y + size * 0.85);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
     drawOverlay() {
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         this.ctx.fillRect(0, 0, this.width, this.height);
@@ -1873,6 +1910,14 @@ class InputHandler {
             this.commandCallback({ type: 'HINT' });
             return;
         }
+        // Check mute button (left of hint)
+        const muteX = endX - bs * 5;
+        const muteSize = bs * 0.7;
+        const muteY = infoY + (bs - muteSize) / 2;
+        if (x >= muteX && x <= muteX + muteSize && y >= muteY && y <= muteY + muteSize) {
+            this.commandCallback({ type: 'MUTE_TOGGLE' });
+            return;
+        }
     }
     handleIdleClick(x, y) {
         const bs = BoardProfile.blockSize;
@@ -1953,6 +1998,96 @@ exports.AssetGenerator = __require('ui/AssetGenerator').AssetGenerator;
 //# sourceMappingURL=index.js.map
 };
 
+// --- audio/SoundManager.js ---
+__modules['audio/SoundManager'] = function(exports) {
+class SoundManager {
+    constructor() {
+        this.ctx = null;
+        this._muted = false;
+        const saved = localStorage.getItem('imagematch_muted');
+        if (saved === 'true')
+            this._muted = true;
+    }
+    get muted() {
+        return this._muted;
+    }
+    toggleMute() {
+        this._muted = !this._muted;
+        localStorage.setItem('imagematch_muted', String(this._muted));
+    }
+    getCtx() {
+        if (this._muted)
+            return null;
+        if (!this.ctx) {
+            try {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            catch {
+                return null;
+            }
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+        return this.ctx;
+    }
+    playTone(freq, duration, type = 'sine', volume = 0.15, delay = 0) {
+        const ctx = this.getCtx();
+        if (!ctx)
+            return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + duration);
+    }
+    /** Two ascending tones - match found */
+    playMatch() {
+        this.playTone(523, 0.12, 'sine', 0.15, 0);
+        this.playTone(659, 0.15, 'sine', 0.15, 0.08);
+    }
+    /** Short low bump - no match / invalid click */
+    playFail() {
+        this.playTone(180, 0.15, 'triangle', 0.12);
+    }
+    /** Quick click sound */
+    playClick() {
+        this.playTone(800, 0.04, 'sine', 0.08);
+    }
+    /** Ascending arpeggio - stage clear */
+    playWin() {
+        this.playTone(523, 0.15, 'sine', 0.15, 0);
+        this.playTone(659, 0.15, 'sine', 0.15, 0.12);
+        this.playTone(784, 0.15, 'sine', 0.15, 0.24);
+        this.playTone(1047, 0.3, 'sine', 0.18, 0.36);
+    }
+    /** Descending tones - game over */
+    playGameOver() {
+        this.playTone(440, 0.25, 'sine', 0.12, 0);
+        this.playTone(370, 0.25, 'sine', 0.12, 0.2);
+        this.playTone(330, 0.25, 'sine', 0.12, 0.4);
+        this.playTone(262, 0.5, 'triangle', 0.1, 0.6);
+    }
+    /** Short urgent beep - timer warning */
+    playTimerWarning() {
+        this.playTone(880, 0.08, 'square', 0.06);
+    }
+    /** Sparkle shimmer - hint used */
+    playHint() {
+        this.playTone(1200, 0.08, 'sine', 0.08, 0);
+        this.playTone(1600, 0.08, 'sine', 0.06, 0.06);
+        this.playTone(2000, 0.1, 'sine', 0.04, 0.12);
+    }
+}
+//# sourceMappingURL=SoundManager.js.map
+  try { exports.SoundManager = SoundManager; } catch(e) {}
+};
+
 // --- App.js ---
 __modules['App'] = function(exports) {
 var Mahjong = __require('game/Mahjong').Mahjong;
@@ -1961,6 +2096,7 @@ var Renderer = __require('ui/Renderer').Renderer;
 var AssetGenerator = __require('ui/AssetGenerator').AssetGenerator;
 var InputHandler = __require('ui/InputHandler').InputHandler;
 var GameStorage = __require('storage/GameStorage').GameStorage;
+var SoundManager = __require('audio/SoundManager').SoundManager;
 class App {
     constructor(canvas) {
         this.timerInterval = null;
@@ -1973,6 +2109,7 @@ class App {
         this.game = new Mahjong();
         this.renderer = new Renderer(canvas);
         this.storage = new GameStorage();
+        this.sound = new SoundManager();
         this.inputHandler = new InputHandler(canvas, (cmd) => this.handleCommand(cmd));
         window.addEventListener('resize', () => {
             this.renderer.resize();
@@ -2011,6 +2148,18 @@ class App {
         catch {
             // Keep the default renderer with fallback assets
         }
+        // Auto-load saved game if exists
+        if (this.hasSaved) {
+            try {
+                await this.loadGame();
+                return;
+            }
+            catch {
+                // Saved data corrupted or incompatible - start fresh
+                this.hasSaved = false;
+                this.clearSave();
+            }
+        }
         // Sync InputHandler state with game state so buttons work immediately
         this.inputHandler.setCurrentState(this.game.getState());
         this.render();
@@ -2018,15 +2167,18 @@ class App {
     handleCommand(cmd) {
         switch (cmd.type) {
             case 'PLAY':
+                this.sound.playClick();
                 this.game.play();
                 this.startTimer();
                 break;
             case 'PAUSE':
+                this.sound.playClick();
                 this.game.pause();
                 this.stopTimer();
                 this.saveGame();
                 break;
             case 'RESUME':
+                this.sound.playClick();
                 this.game.play();
                 this.startTimer();
                 break;
@@ -2034,40 +2186,51 @@ class App {
                 if (this.game.isPlayState()) {
                     const previewBlocks = this.game.previewRemovableBlocks(cmd.x, cmd.y);
                     if (previewBlocks.length > 0) {
+                        this.sound.playMatch();
                         const blocks = previewBlocks.map(b => ({ x: b.x, y: b.y, type: b.type }));
                         this.game.removeBlock(cmd.x, cmd.y);
                         this.startMatchAnimation(cmd.x, cmd.y, blocks);
                         return; // Animation handles render and win check
                     }
                     else {
+                        this.sound.playFail();
                         this.game.removeBlock(cmd.x, cmd.y);
                     }
                 }
                 break;
             case 'HINT':
+                this.sound.playHint();
                 this.game.updateHint();
                 break;
             case 'NEW_GAME':
+                this.sound.playClick();
                 this.stopTimer();
                 this.game.newGame();
                 this.clearSave();
                 break;
             case 'TRY_AGAIN':
+                this.sound.playClick();
                 this.stopTimer();
                 this.game.tryAgain();
                 this.clearSave();
                 break;
             case 'WIN_CONTINUE':
+                this.sound.playClick();
                 this.game.idle();
                 break;
             case 'CHALLENGE':
+                this.sound.playClick();
                 this.stopTimer();
                 this.game.challengeNextStage();
                 this.clearSave();
                 break;
             case 'RESUME_SAVED':
+                this.sound.playClick();
                 this.loadGame();
                 return;
+            case 'MUTE_TOGGLE':
+                this.sound.toggleMute();
+                break;
         }
         this.inputHandler.setCurrentState(this.game.getState());
         this.render();
@@ -2080,9 +2243,16 @@ class App {
             if (this.game.isPlayState()) {
                 const alive = this.game.tick();
                 if (!alive) {
+                    this.sound.playGameOver();
                     this.game.gameoverState();
                     this.stopTimer();
                     this.clearSave();
+                }
+                else {
+                    const time = this.game.getTime();
+                    if (time > 0 && time <= 5) {
+                        this.sound.playTimerWarning();
+                    }
                 }
                 this.render();
             }
@@ -2118,6 +2288,7 @@ class App {
                 lastRemovedBlocks: [],
                 animationProgress: 1,
                 matchAnimation: this.matchAnimation,
+                muted: this.sound.muted,
             };
             this.renderer.render(renderState);
             this.animationFrameId = null;
@@ -2148,6 +2319,7 @@ class App {
                 this.matchAnimRafId = null;
                 // Check win condition after animation
                 if (this.game.isFinishGame()) {
+                    this.sound.playWin();
                     this.game.winState();
                     this.stopTimer();
                     this.clearSave();
@@ -2178,11 +2350,15 @@ class App {
                     this.startTimer();
                 }
                 this.render();
+                return;
             }
         }
         catch (e) {
             console.error('Failed to load game:', e);
         }
+        // Fallback: render current state if load failed or no data
+        this.inputHandler.setCurrentState(this.game.getState());
+        this.render();
     }
     async clearSave() {
         try {

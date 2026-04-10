@@ -73,8 +73,14 @@ export class App {
 
     // Auto-load saved game if exists
     if (this.hasSaved) {
-      await this.loadGame();
-      return;
+      try {
+        await this.loadGame();
+        return;
+      } catch {
+        // Saved data corrupted or incompatible - start fresh
+        this.hasSaved = false;
+        this.clearSave();
+      }
     }
 
     // Sync InputHandler state with game state so buttons work immediately
@@ -284,10 +290,14 @@ export class App {
           this.startTimer();
         }
         this.render();
+        return;
       }
     } catch (e) {
       console.error('Failed to load game:', e);
     }
+    // Fallback: render current state if load failed or no data
+    this.inputHandler.setCurrentState(this.game.getState());
+    this.render();
   }
 
   private async clearSave(): Promise<void> {
