@@ -57,12 +57,12 @@ export const BoardProfile = {
   setScreenSize(w: number, h: number): void {
     this.screenW = w;
     this.screenH = h;
-    const widthBlockSize = Math.floor(h / (this.boardHeight + 5));
+    const widthBlockSize = Math.floor(h / (this.boardHeight + 5.5));
     let bs = Math.floor(w / this.boardWidth);
     bs = bs <= widthBlockSize ? bs : widthBlockSize;
     this.blockSize = bs;
     this.startX = Math.floor((w - bs * this.boardWidth) / 2);
-    this.startY = bs;
+    this.startY = Math.floor(bs * 1.5);
     this.endX = this.startX + bs * this.boardWidth;
     this.endY = this.startY + bs * this.boardHeight;
     this.buttonW = bs * 4;

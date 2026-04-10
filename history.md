@@ -84,6 +84,14 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 - **App.ts**: `animating` 플래그로 타이머 틱 스킵
 - 애니메이션 완료 후 자동 차단 해제 및 승리 조건 확인
 
+---
+
+## 2026-04-10: 타이머 바 위치 수정 + 애니메이션 시간 단축
+
+### 수정 사항
+1. **타이머 바 상단 짤림 수정**: `BoardProfile.setScreenSize()`에서 `startY`를 `bs`→`bs*1.5`로 변경, 분모 `boardHeight+5`→`boardHeight+5.5`로 조정하여 상단 여백 확보
+2. **매칭 애니메이션 단축**: 700ms → 450ms로 변경하여 더 빠른 게임 템포
+
 ### 기술 스택
 - **언어**: TypeScript (strict mode)
 - **렌더링**: HTML5 Canvas (Android 원본 PNG 이미지 + 프로시저럴 폴백)

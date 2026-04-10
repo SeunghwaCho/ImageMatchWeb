@@ -202,7 +202,7 @@ export class App {
       progress: 0,
     };
     const startTime = performance.now();
-    const duration = 700; // ms
+    const duration = 450; // ms
 
     const animate = (now: number) => {
       const elapsed = now - startTime;
