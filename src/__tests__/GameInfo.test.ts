@@ -228,4 +228,29 @@ describe('GameInfo', () => {
     expect(info2.getHighScore()).toBe(5000);
     expect(info2.getHighStage()).toBe(10);
   });
+
+  test('serialization preserves time', () => {
+    info.initTime();
+    for (let i = 0; i < 25; i++) info.tick();
+    const json = info.toJSON();
+    const info2 = new GameInfo();
+    info2.fromJSON(json as Record<string, unknown>);
+    expect(info2.getTime()).toBe(35);
+  });
+
+  test('serialization preserves stage at high values', () => {
+    info.setStage(15);
+    const json = info.toJSON();
+    const info2 = new GameInfo();
+    info2.fromJSON(json as Record<string, unknown>);
+    expect(info2.getStage()).toBe(15);
+  });
+
+  test('fromJSON with missing fields uses defaults', () => {
+    const info2 = new GameInfo();
+    info2.fromJSON({} as Record<string, unknown>);
+    expect(info2.getScore()).toBe(0);
+    expect(info2.getStage()).toBe(0);
+    expect(info2.getHighStage()).toBe(1);
+  });
 });

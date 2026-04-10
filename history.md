@@ -114,6 +114,35 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 
 ---
 
+## 2026-04-10: 모바일 게임 저장/복원 완전 수정
+
+### 문제
+모바일에서 브라우저를 닫고 다시 열면 항상 스테이지 1에서 시작됨
+
+### 원인
+1. `visibilitychange`가 PLAY 상태에서만 저장 → PAUSE/IDLE/END 상태에서 탭 닫으면 저장 안 됨
+2. 모바일에서 `beforeunload` 이벤트 미발생 → 페이지 종료 시 저장 기회 없음
+3. 스테이지 클리어 시 `clearSave()` 호출 → 승리 후 진행 상태가 삭제됨
+4. `dist/bundle.js` 미커밋으로 이전 수정 사항이 배포되지 않았음
+5. `loadGame()` 실패 시 화면 렌더링 안 되는 경로 존재
+
+### 수정 사항
+
+#### 저장 강화
+- `visibilitychange`: 모든 상태에서 저장 (PLAY일 때만 → 항상)
+- `pagehide` 이벤트 리스너 추가 (모바일에서 `beforeunload`보다 신뢰성 높음)
+- PLAY 시작, WIN_CONTINUE, 스테이지 클리어 시 `saveGame()` 호출 추가
+- 승리 시 `clearSave()` → `saveGame()`으로 변경
+
+#### 복원 안정성
+- `loadGame()` 실패 시에도 항상 화면 렌더링하는 fallback 추가
+- `init()` 자동 로드 시 예외 처리 강화 (손상 데이터 → 새 게임 시작)
+
+#### 빌드 산출물 커밋
+- `dist/bundle.js`를 git에 포함하여 실제 배포에 반영
+
+---
+
 ## 2026-04-10: 화면 미표시 버그 수정 + 테스트 업데이트 + 빌드 스크립트 개선
 
 ### 수행 작업
@@ -148,10 +177,10 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 |--------|----------|------|
 | Block.test.ts | 7 | PASS |
 | Board.test.ts | 24 | PASS |
-| GameInfo.test.ts | 31 | PASS |
-| Mahjong.test.ts | 30 | PASS |
+| GameInfo.test.ts | 34 | PASS |
+| Mahjong.test.ts | 36 | PASS |
 | SoundManager.test.ts | 15 (신규) | PASS |
-| **합계** | **106** | **ALL PASS** |
+| **합계** | **115** | **ALL PASS** |
 
 ---
 

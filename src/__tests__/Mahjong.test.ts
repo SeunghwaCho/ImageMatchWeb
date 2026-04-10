@@ -223,4 +223,67 @@ describe('Mahjong', () => {
     game2.fromJSON(json as any);
     expect(game2.isPauseState()).toBe(true);
   });
+
+  test('fromJSON restores IDLE state with correct stage', () => {
+    // Simulate: play stage 1, win, go to IDLE for stage 2
+    game.play();
+    game.winState();
+    game.idle(); // stageUp -> stage 2
+    const json = game.toJSON();
+
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.isIdleState()).toBe(true);
+    expect(game2.getStage()).toBe(2);
+  });
+
+  test('fromJSON restores END (win) state', () => {
+    game.play();
+    game.winState();
+    expect(game.isEndState()).toBe(true);
+    const json = game.toJSON();
+
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.isEndState()).toBe(true);
+    expect(game2.getStage()).toBe(game.getStage());
+  });
+
+  test('serialization round-trip preserves high stage', () => {
+    game.play();
+    game.winState(); // updates high stage
+    const json = game.toJSON();
+
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.getGameInfo().getHighStage()).toBe(game.getGameInfo().getHighStage());
+  });
+
+  test('serialization round-trip preserves hint count', () => {
+    game.play();
+    game.getGameInfo().addHint(2);
+    const json = game.toJSON();
+
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.getHintCount()).toBe(game.getHintCount());
+  });
+
+  test('toJSON captures board state', () => {
+    game.play();
+    const json = game.toJSON() as any;
+    expect(json.board).toBeDefined();
+    expect(json.board.board).toBeDefined();
+    expect(json.board.blockCount).toBeGreaterThan(0);
+  });
+
+  test('fromJSON restores board block count', () => {
+    game.play();
+    const blockCount = game.getBoard().getBlockCount();
+    const json = game.toJSON();
+
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.getBoard().getBlockCount()).toBe(blockCount);
+  });
 });
