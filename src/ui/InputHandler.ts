@@ -11,6 +11,7 @@ export type GameCommand =
   | { type: 'CHALLENGE' }
   | { type: 'WIN_CONTINUE' }
   | { type: 'RESUME_SAVED' }
+  | { type: 'MUTE_TOGGLE' }
   | { type: 'NONE' };
 
 export class InputHandler {
@@ -106,6 +107,15 @@ export class InputHandler {
     const hintX = endX - bs * 3;
     if (x >= hintX && x <= hintX + bs && y >= infoY && y <= infoY + bs) {
       this.commandCallback({ type: 'HINT' });
+      return;
+    }
+
+    // Check mute button (left of hint)
+    const muteX = endX - bs * 5;
+    const muteSize = bs * 0.7;
+    const muteY = infoY + (bs - muteSize) / 2;
+    if (x >= muteX && x <= muteX + muteSize && y >= muteY && y <= muteY + muteSize) {
+      this.commandCallback({ type: 'MUTE_TOGGLE' });
       return;
     }
   }

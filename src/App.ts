@@ -6,6 +6,7 @@ import { Renderer, RenderState, MatchAnimationData } from './ui/Renderer';
 import { AssetGenerator } from './ui/AssetGenerator';
 import { InputHandler, GameCommand } from './ui/InputHandler';
 import { GameStorage } from './storage/GameStorage';
+import { SoundManager } from './audio/SoundManager';
 
 export class App {
   private game: Mahjong;
@@ -19,12 +20,14 @@ export class App {
   private matchAnimation: MatchAnimationData | null = null;
   private matchAnimRafId: number | null = null;
   private canvas: HTMLCanvasElement;
+  private sound: SoundManager;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.game = new Mahjong();
     this.renderer = new Renderer(canvas);
     this.storage = new GameStorage();
+    this.sound = new SoundManager();
     this.inputHandler = new InputHandler(canvas, (cmd) => this.handleCommand(cmd));
 
     window.addEventListener('resize', () => {
@@ -68,6 +71,12 @@ export class App {
       // Keep the default renderer with fallback assets
     }
 
+    // Auto-load saved game if exists
+    if (this.hasSaved) {
+      await this.loadGame();
+      return;
+    }
+
     // Sync InputHandler state with game state so buttons work immediately
     this.inputHandler.setCurrentState(this.game.getState());
     this.render();
@@ -76,17 +85,20 @@ export class App {
   private handleCommand(cmd: GameCommand): void {
     switch (cmd.type) {
       case 'PLAY':
+        this.sound.playClick();
         this.game.play();
         this.startTimer();
         break;
 
       case 'PAUSE':
+        this.sound.playClick();
         this.game.pause();
         this.stopTimer();
         this.saveGame();
         break;
 
       case 'RESUME':
+        this.sound.playClick();
         this.game.play();
         this.startTimer();
         break;
@@ -95,45 +107,57 @@ export class App {
         if (this.game.isPlayState()) {
           const previewBlocks = this.game.previewRemovableBlocks(cmd.x, cmd.y);
           if (previewBlocks.length > 0) {
+            this.sound.playMatch();
             const blocks = previewBlocks.map(b => ({ x: b.x, y: b.y, type: b.type }));
             this.game.removeBlock(cmd.x, cmd.y);
             this.startMatchAnimation(cmd.x, cmd.y, blocks);
             return; // Animation handles render and win check
           } else {
+            this.sound.playFail();
             this.game.removeBlock(cmd.x, cmd.y);
           }
         }
         break;
 
       case 'HINT':
+        this.sound.playHint();
         this.game.updateHint();
         break;
 
       case 'NEW_GAME':
+        this.sound.playClick();
         this.stopTimer();
         this.game.newGame();
         this.clearSave();
         break;
 
       case 'TRY_AGAIN':
+        this.sound.playClick();
         this.stopTimer();
         this.game.tryAgain();
         this.clearSave();
         break;
 
       case 'WIN_CONTINUE':
+        this.sound.playClick();
         this.game.idle();
         break;
 
       case 'CHALLENGE':
+        this.sound.playClick();
         this.stopTimer();
         this.game.challengeNextStage();
         this.clearSave();
         break;
 
       case 'RESUME_SAVED':
+        this.sound.playClick();
         this.loadGame();
         return;
+
+      case 'MUTE_TOGGLE':
+        this.sound.toggleMute();
+        break;
     }
 
     this.inputHandler.setCurrentState(this.game.getState());
@@ -147,9 +171,15 @@ export class App {
       if (this.game.isPlayState()) {
         const alive = this.game.tick();
         if (!alive) {
+          this.sound.playGameOver();
           this.game.gameoverState();
           this.stopTimer();
           this.clearSave();
+        } else {
+          const time = this.game.getTime();
+          if (time > 0 && time <= 5) {
+            this.sound.playTimerWarning();
+          }
         }
         this.render();
       }
@@ -188,6 +218,7 @@ export class App {
         lastRemovedBlocks: [],
         animationProgress: 1,
         matchAnimation: this.matchAnimation,
+        muted: this.sound.muted,
       };
 
       this.renderer.render(renderState);
@@ -221,6 +252,7 @@ export class App {
         this.matchAnimRafId = null;
         // Check win condition after animation
         if (this.game.isFinishGame()) {
+          this.sound.playWin();
           this.game.winState();
           this.stopTimer();
           this.clearSave();

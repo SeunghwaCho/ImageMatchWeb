@@ -24,6 +24,7 @@ export interface RenderState {
   lastRemovedBlocks: { x: number; y: number }[];
   animationProgress: number;
   matchAnimation: MatchAnimationData | null;
+  muted: boolean;
 }
 
 export class Renderer {
@@ -296,6 +297,12 @@ export class Renderer {
         infoY + bs / 2
       );
     }
+
+    // Mute button (left of hint)
+    const muteX = endX - bs * 5;
+    const muteSize = bs * 0.7;
+    const muteY = infoY + (bs - muteSize) / 2;
+    this.drawMuteIcon(muteX, muteY, muteSize, renderState.muted);
 
     // High score at bottom
     ctx.fillStyle = '#888';
@@ -662,6 +669,25 @@ export class Renderer {
     if (resumeBtn) {
       ctx.drawImage(resumeBtn, buttonX, buttonY + bs * 7, buttonW, buttonH);
     }
+  }
+
+  private drawMuteIcon(x: number, y: number, size: number, muted: boolean): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = muted ? '#666' : '#AAA';
+    ctx.font = `${Math.floor(size * 0.85)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(muted ? '\uD83D\uDD07' : '\uD83D\uDD0A', x + size / 2, y + size / 2);
+    if (muted) {
+      ctx.strokeStyle = '#E74C3C';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + size * 0.15, y + size * 0.15);
+      ctx.lineTo(x + size * 0.85, y + size * 0.85);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private drawOverlay(): void {
