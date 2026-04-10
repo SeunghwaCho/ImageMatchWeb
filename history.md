@@ -92,6 +92,15 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 1. **타이머 바 상단 짤림 수정**: `BoardProfile.setScreenSize()`에서 `startY`를 `bs`→`bs*1.5`로 변경, 분모 `boardHeight+5`→`boardHeight+5.5`로 조정하여 상단 여백 확보
 2. **매칭 애니메이션 단축**: 700ms → 450ms로 변경하여 더 빠른 게임 템포
 
+---
+
+## 2026-04-10: 경로 끝점 원 추가 + 힌트 경로 표시 + 시작 버튼 수정
+
+### 수정 사항
+1. **애니메이션 경로 끝점 원**: 매칭 경로 라인의 시작점/끝점에 시안색 원(r=6) 추가, 3단계 모두 적용
+2. **힌트 경로 표시**: 힌트 활성화 시 클릭 위치→매칭 블록 사이에 노란 경로 라인 + 끝점 원 표시, 클릭 셀에 점선 테두리
+3. **시작 버튼 안 먹힘 수정**: `App.init()`에서 `InputHandler.setCurrentState()`를 호출하지 않아 상태가 `0`(MENU)으로 남아있던 버그. 게임 상태 동기화 추가
+
 ### 기술 스택
 - **언어**: TypeScript (strict mode)
 - **렌더링**: HTML5 Canvas (Android 원본 PNG 이미지 + 프로시저럴 폴백)

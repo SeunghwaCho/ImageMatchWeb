@@ -1333,12 +1333,54 @@ class Renderer {
                 }
             }
         }
-        // Draw hint overlay
+        // Draw hint overlay with path
         if (renderState.hintBlocks && renderState.hintBlocks.length > 0) {
-            for (const hint of renderState.hintBlocks) {
+            // hintBlocks[0] = click position, hintBlocks[1..] = matched blocks
+            const clickHint = renderState.hintBlocks[0];
+            const matchedHints = renderState.hintBlocks.slice(1);
+            // Draw hint highlight on matched blocks
+            for (const hint of matchedHints) {
                 const x = startX + hint.x * bs;
                 const y = startY + hint.y * bs;
                 ctx.drawImage(this.assets.getBlockImage(66), x, y, bs, bs);
+            }
+            // Draw hint path lines from click position to each matched block
+            if (clickHint && matchedHints.length > 0) {
+                const cx = startX + clickHint.x * bs + bs / 2;
+                const cy = startY + clickHint.y * bs + bs / 2;
+                // Highlight click cell
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.7)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeRect(startX + clickHint.x * bs + 2, startY + clickHint.y * bs + 2, bs - 4, bs - 4);
+                ctx.setLineDash([]);
+                ctx.restore();
+                for (const hint of matchedHints) {
+                    const hx = startX + hint.x * bs + bs / 2;
+                    const hy = startY + hint.y * bs + bs / 2;
+                    // Path line
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+                    ctx.lineWidth = 3;
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = '#FFD700';
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(hx, hy);
+                    ctx.stroke();
+                    // Endpoint circles
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.restore();
+                }
             }
         }
     }
@@ -1480,6 +1522,14 @@ class Renderer {
                 ctx.moveTo(cx, cy);
                 ctx.lineTo(endLineX, endLineY);
                 ctx.stroke();
+                // Endpoint circles at connection points
+                ctx.fillStyle = '#00FFFF';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(endLineX, endLineY, 5, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
                 ctx.restore();
@@ -1501,6 +1551,14 @@ class Renderer {
                 ctx.moveTo(cx, cy);
                 ctx.lineTo(bx, by);
                 ctx.stroke();
+                // Endpoint circles
+                ctx.fillStyle = '#00FFFF';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(bx, by, 6, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
                 ctx.restore();
@@ -1550,6 +1608,14 @@ class Renderer {
                 ctx.moveTo(cx, cy);
                 ctx.lineTo(bx, by);
                 ctx.stroke();
+                // Fading endpoint circles
+                ctx.fillStyle = '#00FFFF';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(bx, by, 6, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
                 ctx.restore();
@@ -1945,6 +2011,8 @@ class App {
         catch {
             // Keep the default renderer with fallback assets
         }
+        // Sync InputHandler state with game state so buttons work immediately
+        this.inputHandler.setCurrentState(this.game.getState());
         this.render();
     }
     handleCommand(cmd) {

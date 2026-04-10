@@ -68,6 +68,8 @@ export class App {
       // Keep the default renderer with fallback assets
     }
 
+    // Sync InputHandler state with game state so buttons work immediately
+    this.inputHandler.setCurrentState(this.game.getState());
     this.render();
   }
 
