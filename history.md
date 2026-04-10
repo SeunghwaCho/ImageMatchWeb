@@ -101,6 +101,17 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 2. **힌트 경로 표시**: 힌트 활성화 시 클릭 위치→매칭 블록 사이에 노란 경로 라인 + 끝점 원 표시, 클릭 셀에 점선 테두리
 3. **시작 버튼 안 먹힘 수정**: `App.init()`에서 `InputHandler.setCurrentState()`를 호출하지 않아 상태가 `0`(MENU)으로 남아있던 버그. 게임 상태 동기화 추가
 
+---
+
+## 2026-04-10: 릴리스 스크립트 추가
+
+### 수행 작업
+- **release.sh** 스크립트 생성: 빌드 후 배포용 `release/` 폴더 자동 생성
+  - 기존 `release/` 폴더 삭제 → `npm run build` → 필요한 파일만 복사
+  - `index.html`, `bundle.js`, `assets/` 만 포함 (개발 파일 제외)
+  - `index.html` 내 스크립트 경로 자동 수정 (`dist/bundle.js` → `bundle.js`)
+- `.gitignore`에 `release/` 추가
+
 ### 기술 스택
 - **언어**: TypeScript (strict mode)
 - **렌더링**: HTML5 Canvas (Android 원본 PNG 이미지 + 프로시저럴 폴백)

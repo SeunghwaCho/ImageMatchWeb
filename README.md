@@ -23,6 +23,15 @@ npm run build
 npx serve .
 ```
 
+## 릴리스 (배포용 빌드)
+
+```bash
+# release/ 폴더 생성 (빌드 + 필요한 파일만 복사)
+./release.sh
+```
+
+`release/` 폴더를 그대로 웹 서버에 업로드하면 게임을 플레이할 수 있습니다.
+
 ## 개발
 
 ```bash

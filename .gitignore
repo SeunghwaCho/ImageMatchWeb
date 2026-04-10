@@ -2,3 +2,4 @@ node_modules/
 dist/*.js.map
 dist/*.d.ts
 *.tsbuildinfo
+release/
