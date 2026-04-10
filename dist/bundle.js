@@ -2117,17 +2117,21 @@ class App {
         });
         // Auto-save on visibility change (tab switch, app background)
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden && this.game.isPlayState()) {
-                this.game.pause();
+            if (document.hidden) {
+                if (this.game.isPlayState()) {
+                    this.game.pause();
+                    this.render();
+                }
                 this.saveGame();
-                this.render();
             }
         });
-        // Auto-save on beforeunload
+        // Auto-save on pagehide (more reliable on mobile than beforeunload)
+        window.addEventListener('pagehide', () => {
+            this.saveGame();
+        });
+        // Auto-save on beforeunload (desktop fallback)
         window.addEventListener('beforeunload', () => {
-            if (this.game.isPlayState() || this.game.isPauseState()) {
-                this.saveGame();
-            }
+            this.saveGame();
         });
         this.init();
     }
@@ -2170,6 +2174,7 @@ class App {
                 this.sound.playClick();
                 this.game.play();
                 this.startTimer();
+                this.saveGame();
                 break;
             case 'PAUSE':
                 this.sound.playClick();
@@ -2217,6 +2222,7 @@ class App {
             case 'WIN_CONTINUE':
                 this.sound.playClick();
                 this.game.idle();
+                this.saveGame();
                 break;
             case 'CHALLENGE':
                 this.sound.playClick();
@@ -2322,7 +2328,7 @@ class App {
                     this.sound.playWin();
                     this.game.winState();
                     this.stopTimer();
-                    this.clearSave();
+                    this.saveGame();
                     this.inputHandler.setCurrentState(this.game.getState());
                 }
                 this.render();
