@@ -20,6 +20,7 @@ const modules = [
   'ui/Renderer.js',
   'ui/InputHandler.js',
   'ui/index.js',
+  'audio/SoundManager.js',
   'App.js',
   'main.js',
 ];

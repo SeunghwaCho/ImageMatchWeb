@@ -185,4 +185,27 @@ describe('Board', () => {
     // Higher stages should generally have more blocks
     expect(count2).toBeGreaterThanOrEqual(count1);
   });
+
+  test('getHintBlocks returns array', () => {
+    const hintBlocks = board.getHintBlocks();
+    expect(Array.isArray(hintBlocks)).toBe(true);
+    expect(hintBlocks.length).toBe(0); // no hint active initially
+  });
+
+  test('getHintBlocks returns blocks after updateHint', () => {
+    const grid = board.getBoard();
+    grid[0][0] = 5;
+    grid[0][2] = 5;
+    (board as any).blockCount = 2;
+
+    board.updateHint();
+    const hintBlocks = board.getHintBlocks();
+    expect(hintBlocks.length).toBeGreaterThan(0);
+  });
+
+  test('getBoard returns 2D array', () => {
+    const grid = board.getBoard();
+    expect(grid.length).toBeGreaterThanOrEqual(12);
+    expect(grid[0].length).toBeGreaterThanOrEqual(8);
+  });
 });

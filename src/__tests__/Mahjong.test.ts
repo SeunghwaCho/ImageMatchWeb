@@ -141,4 +141,86 @@ describe('Mahjong', () => {
     game.play();
     expect(game.getStage()).toBeGreaterThanOrEqual(1);
   });
+
+  test('removeObserver stops notifications', () => {
+    const states: number[] = [];
+    const observer = (state: number) => states.push(state);
+    game.addObserver(observer);
+    game.play();
+    expect(states.length).toBe(1);
+    game.removeObserver(observer);
+    game.pause();
+    expect(states.length).toBe(1); // no new notification
+  });
+
+  test('getScore returns current score', () => {
+    game.play();
+    expect(game.getScore()).toBe(0);
+    game.getGameInfo().addScore(100);
+    expect(game.getScore()).toBe(100);
+  });
+
+  test('getHighScore returns high score', () => {
+    game.play();
+    game.getGameInfo().addScore(500);
+    expect(game.getHighScore()).toBe(500);
+  });
+
+  test('getHintCount returns hint count', () => {
+    expect(game.getHintCount()).toBe(3); // DEFAULT_HINT
+  });
+
+  test('getBoard returns Board instance', () => {
+    const board = game.getBoard();
+    expect(board).toBeDefined();
+    expect(typeof board.getBlockCount).toBe('function');
+  });
+
+  test('isFinishGame returns true when board is clear', () => {
+    // Fresh board after construction has blocks from setStage(1)
+    expect(game.isFinishGame()).toBe(false);
+  });
+
+  test('previewRemovableBlocks returns blocks without modifying state', () => {
+    game.play();
+    const countBefore = game.getBoard().getBlockCount();
+    game.previewRemovableBlocks(0, 0);
+    expect(game.getBoard().getBlockCount()).toBe(countBefore);
+  });
+
+  test('addTick callback adds time to gameInfo', () => {
+    game.play();
+    // Tick down to 30 first so addTick can actually increase
+    for (let i = 0; i < 30; i++) game.tick();
+    const timeBefore = game.getTime();
+    game.addTick(5);
+    expect(game.getTime()).toBe(timeBefore + 5);
+  });
+
+  test('addHint callback adds hints to gameInfo', () => {
+    game.play();
+    const hintBefore = game.getHintCount();
+    game.addHint(2);
+    expect(game.getHintCount()).toBe(hintBefore + 2);
+  });
+
+  test('serialization preserves score and time', () => {
+    game.play();
+    game.getGameInfo().addScore(1234);
+    for (let i = 0; i < 10; i++) game.tick();
+    const json = game.toJSON();
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.getScore()).toBe(1234);
+    expect(game2.getTime()).toBe(50); // 60 - 10
+  });
+
+  test('fromJSON restores previous state', () => {
+    game.play();
+    game.pause();
+    const json = game.toJSON();
+    const game2 = new Mahjong();
+    game2.fromJSON(json as any);
+    expect(game2.isPauseState()).toBe(true);
+  });
 });

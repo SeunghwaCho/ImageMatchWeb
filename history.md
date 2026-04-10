@@ -103,14 +103,55 @@ Android Java 기반 Mahjong 스타일 이미지 매칭 게임을 HTML5 Canvas + 
 
 ---
 
-## 2026-04-10: 릴리스 스크립트 추가
+## 2026-04-10: 빌드 스크립트 추가
 
 ### 수행 작업
-- **release.sh** 스크립트 생성: 빌드 후 배포용 `release/` 폴더 자동 생성
-  - 기존 `release/` 폴더 삭제 → `npm run build` → 필요한 파일만 복사
+- **build.sh** 스크립트 생성: 빌드 후 배포용 `build/` 폴더 자동 생성
+  - 기존 `build/` 폴더 삭제 → `npm run build` → 필요한 파일만 복사
   - `index.html`, `bundle.js`, `assets/` 만 포함 (개발 파일 제외)
   - `index.html` 내 스크립트 경로 자동 수정 (`dist/bundle.js` → `bundle.js`)
-- `.gitignore`에 `release/` 추가
+- `.gitignore`에 `build/` 추가
+
+---
+
+## 2026-04-10: 화면 미표시 버그 수정 + 테스트 업데이트 + 빌드 스크립트 개선
+
+### 수행 작업
+
+#### 1. 화면 미표시 버그 수정
+- **원인**: `build.js`의 모듈 목록에 `audio/SoundManager.js` 미등록
+- 번들러가 SoundManager를 포함하지 않아 `__require('audio/SoundManager')` 런타임 에러 발생
+- App 초기화 실패 → canvas에 아무것도 렌더링 안 됨
+- **수정**: `build.js` modules 배열에 `'audio/SoundManager.js'` 추가
+
+#### 2. 테스트 케이스 업데이트 (78개 → 106개)
+- **SoundManager.test.ts** 신규 (15개 테스트)
+  - Web Audio API + localStorage 모킹
+  - 뮤트 상태 초기화, 토글, localStorage 영속화
+  - 모든 사운드 메서드 정상 동작 검증
+  - 뮤트 상태에서 소리 재생 억제 검증
+- **Mahjong.test.ts** 확장 (19개 → 30개)
+  - removeObserver, getScore, getHighScore, getHintCount, getBoard
+  - isFinishGame, previewRemovableBlocks
+  - addTick/addHint 콜백 메서드
+  - serialization 상세 검증 (score, time, previousState)
+- **Board.test.ts** 확장 (20개 → 24개)
+  - getHintBlocks, getBoard 차원 검증
+
+#### 3. release.sh → build.sh 전환
+- `release.sh` 삭제, `build.sh`로 이름 변경
+- 출력 디렉토리 `release/` → `build/`로 변경
+- `.gitignore`에 `build/` 추가
+
+### 테스트 결과
+| 스위트 | 테스트 수 | 상태 |
+|--------|----------|------|
+| Block.test.ts | 7 | PASS |
+| Board.test.ts | 24 | PASS |
+| GameInfo.test.ts | 31 | PASS |
+| Mahjong.test.ts | 30 | PASS |
+| SoundManager.test.ts | 15 (신규) | PASS |
+| **합계** | **106** | **ALL PASS** |
 
 ---
 
